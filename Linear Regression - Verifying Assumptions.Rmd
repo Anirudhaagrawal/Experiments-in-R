@@ -1,0 +1,315 @@
+---
+title: "Homework 2"
+author: "Shashank Sistla, Anirudha Agrawal"
+date: "2023-01-26"
+output:
+  html_document: default
+  pdf_document: default
+header-includes: \usepackage{mathcal}
+---
+# Q1
+## a)
+First, we import the required libraries.
+```{r}
+require(MASS)
+```
+Next, we define necessary arrays to iterate and store values of intercepts and slopes.
+
+```{r}
+N = 1000
+sample_sizes = c(50,100,200,500)
+slope_list = numeric()
+intercept_list = numeric()
+```
+Finally, we loop over the various sample sizes and plot three plots: 
+
+* Histogram for slopes
+* Histogram for intercepts
+* Levels plot to display the bi-variate normal distribution (x-axis is slope, y-axis is intercept)
+
+The histograms are the visual evidence to show that the distributions are in-fact normal distributions.
+The contour plot shows that the joint distribution is also normal. We initially added q-q plots as well, to prove that the histograms were indeed normal distributions, but removed them for the sake of brevity, since they didn't add too much to infer.
+
+```{r}
+for (n in sample_sizes){
+  
+  #Running Experiment N times
+  for (i in 1:N) {
+    x = runif(n, -1, 1)
+    y <- rnorm(n, 1 + 2*x, 0.5)
+    linear <- lm(y ~ x)
+    slope_list[i] <- linear$coefficients[2]
+    intercept_list[i] <- linear$coefficients[1]
+  }
+  n_s = as.character(n)
+  hist_slope_string = paste("Slopes  n =", n_s)
+  inte_slope_string = paste("Intercepts  n =", n_s)
+  par(mfrow=c(1,3))
+
+  #Display histograms
+  hist(slope_list, main = hist_slope_string)
+  hist(intercept_list, main = inte_slope_string)
+  
+  #was trying to plot normal distribution over the histogram, could not get it to work
+  sl_mean = mean(slope_list)
+  in_mean = mean(intercept_list)
+  sl_sd = sd(slope_list)
+  in_sd = sd(intercept_list)
+  
+  # Create bi-variate distribution
+  dist = cbind(slope_list,intercept_list)  
+  # Calculate kernel density estimate
+  kde <- kde2d(dist[,1], dist[,2], n = 50) 
+  
+  #Plot contour plot
+  image(kde)       # from base graphics package
+  contour(kde, add = TRUE)     # from base graphics package
+  title(main = paste("Contour Plot n = ", n_s), font.main = 4)
+}
+```
+
+## b)
+
+We iterate in a similar manner, replacing the normal distributions with t distributions. The same 3 plots are plotted for the t distributions as well.
+
+```{r}
+dof_list = c(2,5,10,20,50)
+for (n in sample_sizes){
+    for (k in dof_list){
+  #Running Experiment N times
+  for (i in 1:N) {
+    x = runif(n, -1, 1)
+    y <- rnorm(n, 1 + 2*x, 0.5)
+    linear <- lm(y ~ x)
+    slope_list[i] <- linear$coefficients[2]
+    intercept_list[i] <- linear$coefficients[1]
+  }
+  n_s = as.character(n)
+  k_s = as.character(k)
+  hist_slope_string = paste("Slopes  n =", n_s, "d.o.f = ", k)
+  inte_slope_string = paste("Intercepts  n =", n_s, "d.o.f = ", k)
+  par(mfrow=c(1,3))
+
+  #Display histograms
+  hist(slope_list, main = hist_slope_string)
+  hist(intercept_list, main = inte_slope_string)
+  
+  #was trying to plot normal distribution over the histogram, could not get it to work
+  sl_mean = mean(slope_list)
+  in_mean = mean(intercept_list)
+  sl_sd = sd(slope_list)
+  in_sd = sd(intercept_list)
+  
+  # Create bi-variate distribution
+  dist = cbind(slope_list,intercept_list)  
+  # Calculate kernel density estimate
+  kde <- kde2d(dist[,1], dist[,2], n = 50) 
+  
+  #Plot contour plot
+  image(kde)       # from base graphics package
+  contour(kde, add = TRUE)     # from base graphics package
+  title(main = paste("Contour Plot n = ", n_s, "d.o.f = ", k), font.main = 4)
+    }
+}
+```
+
+It can be seen in the histograms, that as the degrees of freedom increase, the distribution is "tightening up". In other words, for lower values of t, it appears that the variance is higher. This is applicable to both distributions, 'slope' and 'intercept'. This effect is not noticeable in the histogram, although we suspect that if we were to plot normalized values the effect would also be apparent.
+
+
+# Q2
+## a)
+
+First, we import the required libraries.
+```{r, results="hide"}
+require(MASS)
+require(car)
+```
+
+
+We begin by importing the dataset.
+
+```{r, echo=FALSE}
+tmp = Boston[,c(1,2,3,5,6,7,8,10,11,12,13,14)] # extract selected variables
+X = tmp[complete.cases(tmp),]
+attach(X)
+```
+We will be examining the following assumptions in sequence: 
+
+* Linearity
+
+* Homoscedasticity
+
+* Normality
+
+## Linearity
+
+Even before constructing the linear model, we can have a look at the data using a pairplot, to look to see if the assumptions hold true.
+
+```{r}
+pairs(medv ~ ., data = X, pch = 16)
+```
+
+If we have a look at the first column of the pairplot, we can notice that only a couple features tend to linearity w.r.t to the response variable 'medv'. They are lstat and rm. The rest of the features do not show linearity. This observation is without any rigor, so we can plot more plots to verify if this is true or not.
+
+Now, we can fit the model.
+
+```{r}
+linear = lm(medv ~ ., data = X)
+```
+
+This allows us to plot the residual plot, to observe if the fit is linear.
+```{r}
+plot(linear, which = 1, pch = 16)
+```
+It is quite clear that the fit is not linear in nature. If we examine the residuals obtained w.r.t each feature, we may be able to attribute which features are a non-linear fit to the response variable. Thus, next we plot the residual plots w.r.t each feature.
+
+```{r}
+residualPlots(linear, layout=c(4,3))
+```
+
+We see that the features 'rm' and 'lstat' are not linear w.r.t to the response variable, 'medv'. The features 'dis' and 'crim' also show slight non-linearity, but this is expected since the number of data points towards their extremes is less in number.
+
+However, the issue with marginal residual plots is that it operates on the fact that the other features are held constant, while only the feature at hand is varied. In doing so, the effect of the feature is not isolated. To analyze this, we can create added variable plots, so as to obtain the sources of non-linearity with surety. 
+```{r}
+avPlots(linear,layout=c(4,3))
+```
+  
+  
+It is clear from the added variable plots that both 'rm' and 'lstat' are non-linear w.r.t to 'medv'. 'dis', a feature which we suspected of non-linearity using the marginal residual plot also seems to be non-linear. However, 'crim' does not show that much non-linearity, meaning that after isolating only its effect, it is actually linear w.r.t 'medv'.
+
+
+## Homoscedasticity 
+
+In order to analyze the homoscedasticity, we can first review all three of the plots plotted above for linearity.
+The first plot, the residual plot shows us that the variance is not constant whatsoever. The regions between the middle and edges of the plot show higher variance. If we look at the marginal residual plots, we can see that the only semblance of homoscedasticity is in the plot corresponding to 'age'. All the other plots show drastic changes in the variance.
+
+## Normality
+
+In order to check if the distribution, we plot a q-q plot of the standardized residuals. 
+
+```{r}
+plot(linear, which=2, cex=1, pch=16)
+```
+
+It appears that the distribution of the residuals deviates quite significantly from a theoretical normal distribution. In order to verify this, we can plot the q-q plot along with a confidence region.
+
+```{r}
+qqPlot(linear, pch = 16)
+```
+
+As we can see from the above plot, the residuals deviate from normality quite significantly indeed. This test was unecessary since we already knew that there was no way the residuals could have been normal, since the means weren't zero in the 'Linearity' section of this assignment, and that the variance was not constant in the 'Homoscedasticity' section of this assignment.
+
+## b)
+
+We can check for outliers in the predictors using hat values. Any hat value greater than $ 2 (p+1) /n $ is suspect. Here, $p = 11$ and $ n = 506$. 
+```{r}
+p = length(X)-1
+n = nrow(X)
+h_sus =2*(p+1)/n
+plot(hatvalues(linear), type = "h")
+abline(h =h_sus, lty = 2,col = 'darkred')
+```
+
+We can find the index of the most significant outlier by doing
+
+```{r}
+idx_max = which.max(hatvalues(linear))
+idx_max
+```
+The value of that row is
+
+```{r}
+X[idx_max,]
+```
+We can find the summary of the dataframe using the following
+
+```{r}
+summary(X)
+```
+After comparing both results, we can conclude that the data point with index has a very high value of 'crim', which is why it is an outlier.
+
+## c)
+We can check for outliers in the responses using externally studentized results
+
+```{r}
+plot(abs(rstudent(linear)), type = "h",ylab = "Externally Studentized Residuals (in absolute value)")
+abline(h = qt(.95, n - p - 2),col = 'darkred') 
+```
+
+There are several significant outliers. Let us see the top 4 outliers.
+```{r}
+indexes = order(rstudent(linear),decreasing = TRUE)
+cat("Maximum indices are",paste(indexes[0:4]))
+X[369,]
+X[373,]
+X[372,]
+X[370,]
+```
+
+After comparing with the summary, we see that all of the obtained values have very high values for age. Several of their other features are also either in the 1st or 3rd quartile. Finally, 'medv' is the highest in these observations, which might also be the reason for them being an outlier.
+
+## d) 
+
+To find out which ones are the influential observations, they have to be outliers in both responses and in the predictors. Let us list out the top 5 of both.
+
+```{r}
+      #outlier in responses
+indexes = order(hatvalues(linear),decreasing = TRUE)
+cat("Maximum indices for predictors are",paste(indexes[0:5]))
+indexes = order(rstudent(linear),decreasing = TRUE)
+cat("Maximum indices for responses are",paste(indexes[0:5]))
+```
+
+That didn't work out too well. So instead we can use cook's distance to see the most influential points.
+
+```{r}
+plot(linear, which=4, col="blue", lwd=2)
+abline(h = 1, lty=2) # threshold for suspects (not visible on this plot)
+```
+
+The most influential point according to the cook's distnace graph is 369. Let's have a look at it again.
+
+```{r}
+X[369,]
+```
+
+This might be because of the high value of 'age' and 'medv'.
+
+## e)
+To check for multi-collinearity, we can use VIF
+
+```{r}
+plot(vif(linear), type='h', col=4, lwd=3)
+abline(h = 10, lty=2) # threshold for suspects 
+```
+
+Surprisingly, the test tells us that there isn't too much multi-collinearity. We suspect that 10 is a very high threshold, and pick a lower threshold of 2.5.
+
+```{r}
+plot(vif(linear), type='h', col=4, lwd=3)
+abline(h = 2.5, lty=2) # threshold for suspects 
+```
+
+Next, we can use condition indices
+
+```{r}
+C = cor(Boston[,-c(12)]) # correlation matrix for the predictors
+L = eigen(C) # eigenvalues  
+K = max(L$val)/L$val # condition indices
+plot(K, type='h', col=4, lwd=3)
+abline(h = 20, lty=2) # threshold for suspects
+```
+
+Since several values are over the thresholds from both measures, it is safe to say that the data is riddled with multi-collinearity. As a sanity check, we can check the correlation matrix itself. It should provide similar results.
+
+```{r}
+C
+```
+
+As we can see, the correlation between several variables has an absolute value greater than 0.5, many of which are also more than an absolute value of 0.7. 
+
+## Contribution Statement
+Shashank: Wrote the code for Q2.
+Anirudh: Wrote the code for Q1.
+
+After having written our respective questions, we discussed and wrote the inferences we could make from the plots together.

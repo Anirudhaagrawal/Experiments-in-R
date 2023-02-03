@@ -1,0 +1,262 @@
+---
+title: "Homework 1"
+author: "Shashank Sistla, Anirudha Agrawal"
+date: "2023-01-12"
+output:
+  html_document: default
+  pdf_document: default
+header-includes: \usepackage{mathcal}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Defining the confidence band
+
+We have to create a function confBand(), which takes in 3 parameters,the predictor vector $x$ , the response vector $y$ and the confidence level $ conf $.
+
+In order to create the confidence band, we start off with the following distribution:
+
+$$
+\frac{(\hat{\beta} - \beta)^{\top} X^{\top}X (\hat{\beta} - \beta)}{(p+1)\hat{\sigma}^2} \sim \mathcal{F}_{p+1,n-p-1}
+$$
+where $p$ is the number of regressors, and $n$ is the number of data points, \hat{beta} is the estimated values of the regressors, \beta is the true value of the regressors, and $X$ is the data matrix constructed by concatenation of a column of 1s to the left of the actual data matrix. (which is in case, a vector)
+
+By re-arranging the terms and considering the $1-\alpha$ quantile of the $\mathcal{F}$ distribution, we can define a confidence region of level $(1-\alpha)$ for the left hand side.
+
+$$
+(\hat{\beta} - \beta)^{\top} X^{\top}X (\hat{\beta} - \beta) \le [(p+1) \hat{\sigma}^2 F^{1-\alpha}_{p+1,n-p-1}]
+$$
+
+where $F^{\alpha}_{k,l}$ denotes the $\alpha-quantile$ of $\mathcal{F_{k,l}}$
+
+
+If we take the vector $X(\hat{\beta} - \beta) = a$, we can see that the left hand side is $a^\top a$ and therefore, $\lVert a \rVert^2$. Therefore:
+
+$$
+\lVert (X^{\top}X)^{1/2} (\hat{\beta} - \beta) \rVert \le [(p+1)F^{1-\alpha}_{p+1,n-p-1}]^{1/2}\hat{\sigma}
+$$
+Now, using the fact that the following is true in any euclidean space:
+
+$$
+\lVert u \rVert = \max_{b \ne 0} \frac{\lvert b^\top u \rvert}{\lVert b \rVert}
+$$
+we can construct an interval for $c^{\top}\beta$
+
+$$
+  c^\top \hat{\beta} \pm ((p+1)F^{1-\alpha}_{p+1,n-p-1})^{1/2}\widehat{SE}(c^\top \hat{\beta})
+$$
+
+where
+
+$$
+\widehat{SE}(c^\top \hat{\beta}) = \hat{\sigma} \sqrt{c^\top(X^\top X)^{-1}c}
+$$
+Note that the above equation would give us the standard error of any input vector $c$. If we had multiple vectors and we wanted to find the standard error of all of them, we can calculate them by first concatenating all the vectors into a matrix C, and calculate the standard errors as follows:
+
+$$
+\widehat{SE}(C_j^\top \hat{\beta}) = \hat{\sigma} \sqrt{C^\top(X^\top X)^{-1}C}_{(j,j)}
+$$
+i.e, the $(j,j)$ element of the calculated matrix will give us the standard error of the $j^{th}$ vector of $C$
+
+Lastly,  $\hat{\sigma}$ is the unbiased estimator of $\sigma$, which is the variance of the response variable, given by:
+
+$$
+\hat{\sigma} = \frac{1}{n-p-1} \sum_{i=1}^n (y_i - \hat{y}_i)^2
+$$
+where $\hat{y}$ is the predicted response values of the inputs.
+
+## Q1
+
+Now that everything has been defined, we can begin by defining the data matrix (concatenation of 1s) by
+
+```{r  eval=FALSE}
+X = model.matrix(~ x)
+```
+
+
+Next, we can construct the linear model by solving for $\beta$ as
+
+
+```{r  eval=FALSE}
+\beta = (X^\top X)^{-1}X^\top y
+```
+
+using the code
+
+```{r  eval=FALSE}
+beta = solve((t(X) %*% X)) %*% t(X) %*% y
+```
+
+Next, we can predict y_hat
+
+
+```{r  eval=FALSE}
+y_hat = X %*% beta
+```
+
+
+Next, we can define the number of regressors $p$ and the number of data points $n$
+
+```{r  eval=FALSE}
+p = 1
+n = length(x)
+```
+
+
+Next, we compute the value of \hat{\sigma} 
+
+
+```{r  eval=FALSE}
+sigma_hat = sqrt(sum((y-y_hat)^2)/(n-p-1))
+```
+
+
+
+We can now calculate the standard errors
+
+```{r  eval=FALSE}
+se = sigma_hat * sqrt(diag(x %*% solve((t(X) %*% X)) %*% t(x)))
+```
+
+
+and then calculate the lower and upper bounds as follows
+
+```{r  eval=FALSE}
+se = sigma_hat * sqrt(diag(X %*% solve((t(X) %*% X)) %*% t(X)))
+upper_bound  =  y_hat + sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+lower_bound  =  y_hat - sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+```
+
+
+Let's throw in all the bits and pieces calculated so far into one function, confBand. We import ggplot to plot the final result.
+```{r}
+library(ggplot2)
+confBand <- function(x, y, conf=0.95) {
+  x = tmp$hp
+  y = tmp$mpg
+  X = model.matrix(~ x)
+  beta = solve((t(X) %*% X)) %*% t(X) %*% y
+  y_hat = X %*% beta
+  
+  p = 1
+  n = length(x)
+  
+  sigma_hat = sqrt(sum((y-y_hat)^2)/(n-p-1))
+  
+  se = sigma_hat * sqrt(diag(X %*% solve((t(X) %*% X)) %*% t(X)))
+  upper_bound  =  y_hat + sqrt(2 * qf(p = conf, df1 = 2, df2 = n-2)) * se
+  lower_bound  =  y_hat - sqrt(2 * qf(p = conf, df1 = 2, df2 = n-2)) * se
+  
+  data <- data.frame(x, y)
+  ggplot(data, aes(x, y)) +
+    geom_point() +
+    geom_line(aes(y = y_hat)) +
+    geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.2)
+}
+```
+
+Now that we have defined the function, let us load the corresponding data and try it out! (Note: the dataset must be present in the given directory in order to load the file properly)
+
+```{r}
+load("./datasets/04cars.rda") # loads a data frame called "dat"
+tmp = dat[,c(13,15)] # extract selected variables
+tmp = tmp[complete.cases(tmp),] # extracts complete cases
+tmp = as.data.frame(tmp)
+names(tmp) = c("hp","mpg") # abbreviate names
+
+x = tmp$hp
+y = tmp$mpg
+confBand(x,y)
+```
+
+## Q2
+
+First, we generate the true line using the datapoints
+
+$$
+ y = 1 + x_i 
+$$
+
+where $n = 100$ $x_i$ are drawn from the distribution $Unif(0,1)$. This is repeated $N = 1000$ times.
+
+```{r}
+N = 1000
+n = 100
+x = runif(n)
+y_true = 1 + x
+X = model.matrix(~ x)
+```
+
+Next, we add error to the distribution. The error is obtained from the distribution:
+
+$$
+  \epsilon \sim \mathcal{N}(0,0.2)
+$$
+```{r}
+err = rnorm(100,0,sqrt(0.2))
+y = y_true + err
+```
+
+We can calculate the hat matrix $H$, and subsequently y_hat
+```{r}
+
+H = X %*% solve(t(X) %*% X)%*%t(X)
+y_hat = H %*% y
+```
+
+As already described above, we will now calculate the standard error of the predictions, and the upper and lower bounds
+
+```{r}
+n = 100
+p = 1
+sigma_hat = sqrt(sum((y-y_hat)^2)/(n-p-1))
+se = sigma_hat * sqrt(diag(X %*% solve((t(X) %*% X)) %*% t(X)))
+upper <- y_hat + sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+lower <- y_hat - sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+
+```
+
+Finally, we can check if the lower and upper bounds contain the true line in them. In this case, the condition evaluates to:
+
+```{r}
+all(lower <= y_true & upper >= y_true)
+```
+This only covers one iteration. So we now do this $N$ times, and report the proportion of cases where the true line is indeed between the lower and upper limits.
+
+```{r}
+N = 1000
+n = 100
+x = runif(n)
+y_true = 1 + x
+X = model.matrix(~ x)
+count_true = 0
+for (i in 1:N) {
+  err = rnorm(100,0,sqrt(0.2))
+  y = y_true + err
+  
+  H = X %*% solve(t(X) %*% X)%*%t(X)
+  y_hat = H %*% y
+  
+  n = 100
+  p = 1
+  sigma_hat = sqrt(sum((y-y_hat)^2)/(n-p-1))
+  se = sigma_hat * sqrt(diag(X %*% solve((t(X) %*% X)) %*% t(X)))
+  upper <- y_hat + sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+  lower <- y_hat - sqrt(2 * qf(p = 0.99, df1 = 2, df2 = n-2)) * se
+
+  if(all(lower <= y_true & upper >= y_true))
+    count_true = count_true + 1
+}
+count_true/N
+
+```
+
+## Contribution Statement
+Shashank: Wrote the markdown and code for Q1 \
+Anirudh: Wrote the markdown and code for Q2 \
+
+We discussed on how to tackle and solve both questions first, and then implemented them individually.
+
