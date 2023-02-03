@@ -1,0 +1,262 @@
+---
+title: "Homework 3"
+author: "Shashank Sistla, Anirudha Agrawal"
+date: "2023-01-31"
+output:
+  html_document: default
+  pdf_document: default
+header-includes: \usepackage{mathcal}
+---
+# Q1
+First, we import the required libraries.
+```{r}
+library(ggplot2)
+```
+
+The condition number in this context refers to the condition number of inversion. It tells us how susceptible the matrix is to instability. This happens when the matrix tends to singularity. It has multiple definitions. It can be defined as either the
+
+* ratio of highest eigenvalue to lowest eigenvalue
+
+* ratio of highest singular value to lower singular value
+
+* ratio of the norm of the matrix and the norm of the inverse of the matrix
+
+In this assignment, we will be considering the second definition, i.e, taking the ratio of the largest singular value to the lowest singular value. Let us write a function to compute the condition number.
+
+### Condition Number 
+
+```{r}
+conditionNumber <- function(X){
+  svd_X = svd(X)
+  k = max(svd_X$d)/min(svd_X$d) 
+  return(k)
+}
+```
+
+The question instructs us to create matrices of various sizes, representing different canonical design matrices of instances of polynomial regression, using data of different lengths. The sets of polynomial degree and sizes are given as:
+
+```{r}
+p_list = c(1:20)
+n_list = c(30,50,100,200,500,1000)
+```
+
+We iterate through the lists, generate the design matrix and calculate its condition number. At each iteration, we store the condition number.
+
+
+```{r}
+results_mat = numeric() #create an empty list for the condition numbers
+
+for (n in n_list){
+  x_i = numeric()
+  for (i in 1:n){
+    x_i[i] = i/{n+1}
+  } 
+  
+  for (p in p_list){
+    mat = rep(1,n)
+    for(i in 1:p){
+      mat = cbind(mat,x_i^i)
+    }
+    
+    row = c(n,p,conditionNumber(mat))
+    results_mat = rbind(results_mat,row)
+  }
+}
+```
+
+Next, we cast the data into a dataframe, and rename the columns appropriately.
+
+```{r}
+results <- as.data.frame(results_mat)
+colnames(results) <- c('n', 'p', 'kappa')
+head(results)
+```
+
+We have three variables which we want to plot at once to interpret. For this, we use ggplot's facet_wrap.
+
+```{r}
+ggplot(results, aes(x = p, y = kappa)) +
+  geom_point() +
+  facet_wrap(~ n, nrow = 1)
+```
+
+This plot does not tell us much due to the sheer difference in magnitude along the y-axis (condition number). To try solve this problem, we can plot the logarithm of the condition number instead.
+
+### Final Plot
+```{r}
+results$log_kappa = log(results$kappa, 10)
+ggplot(results, aes(x = p, y = log_kappa)) +
+  geom_point() +
+  facet_wrap(~ n, nrow = 1)
+```
+
+This is a much clearer plot, and reveals an interesting relation, that for a given input data, there is a **linear relationship** between the logarithm of the condition number and the degree of the polynomial chosen. This is inferred by looking at any individual plot above.
+
+Another inference that we can make is that the size of the input data is inversely related to the condition number. This makes sense, since if there are more data points, the matrix can be more numerically stable. This is inferred by looking at the condition number across the input sizes at the same value of 'p' chosen. 
+
+We can conclude from the above results that polynomial regression is not well-conditioned.
+
+
+
+# Q2
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Reading Data
+
+For this assignment we are reading only mpg and hp column of the cars dataset:
+
+```{r, results='hide'}
+load("04cars.rda")
+tmp = dat[,c(13,14)] 
+tmp = tmp[complete.cases(tmp),]
+tmp = as.data.frame(tmp)
+names(tmp) = c("hp", "city_mpg")
+dat = tmp
+attach(dat)
+```
+
+## Defining Piecewise constant function
+
+
+For intervals with no points we carry forward the last fitted constant to this interval. We have added a arguement named color so that we can plot lines with that color, it was a conscious choice to promote readability. 
+
+```{r}
+piecewiseConstant <- function(x, y, L, plot = TRUE, color="blue") {
+  k=L 
+  intervals = 2^k+1 # Setting intervals to 2^k, it's 2^k+1 because that will make 2^k intervals
+  K = seq(min(x), max(x), len=intervals) 
+  lasr_coef=0 # This variable will be used for intervals where there are no points
+  pts = rep(0,4)
+  val = rep(0,4)
+  index=1
+  for (j in 1:(intervals-1)){  # Looping every interval
+    I = (K[j] < x)&(x <= K[j+1]) # Getting all the points in a particular interval
+    if(length(y[I])>0){ # Checking if interval has points
+      fit = lm(y[I] ~ 1) # Fitting a constant
+      pts[index] = K[j] 
+      pts[index+1] = K[j+1]
+      val[index] = coef(fit) # Setting the constant for that interval
+      val[index+1] = coef(fit)
+      index=index+2
+      last_coef=coef(fit)
+      
+    }
+    else
+    {
+      pts[index] =  K[j]
+      pts[index+1] = K[j+1]
+      val[index] = last_coef # Carry forwarding last fitted constant to the interval with no points
+      val[index+1] = last_coef
+      index=index+2
+    }
+  }
+  if(isTRUE(plot)) # Plotting graph only when plot=TRUE
+  {
+    plot(x, y, pch = 16, main="Piecewise constant fit", cex = 1, xlab="Horsepower", ylab="City MPG")
+    lines(pts[1:(2*2^k)], val[1:(2*2^k)], col=color, lwd = 3) 
+  }
+  return(c(pts, val))
+}
+```
+
+## Plotting HP vs MPG 
+
+We first define the min max normalization function to normalize the input variable hp as mentioned in the question. Then we pass the normalized hp to the piecewiseConstant function.
+
+```{r}
+minMax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+min_max_hp = minMax(hp)
+plot(min_max_hp, city_mpg, pch = 16, main="Piecewise constant fit", cex = 1, xlab="Horsepower", ylab="City MPG")
+```
+
+
+## Calling piecewise contant function for L=2
+
+
+```{r}
+l=2
+pts_val = piecewiseConstant(min_max_hp, city_mpg, l, TRUE, "blue")
+```
+
+
+
+As we can see this plot does not really fit well for the values before 0.2
+
+## Calling piecewise contant function for L=3
+
+
+```{r}
+l=3
+
+pts_val = piecewiseConstant(min_max_hp, city_mpg, l, TRUE, "green")
+```
+
+
+
+
+This one is a bit better than l=2 but not much improvement
+
+
+## Calling piecewise contant function for L=4
+
+
+
+```{r}
+l=4
+
+pts_val = piecewiseConstant(min_max_hp, city_mpg, l, TRUE, "red")
+```
+
+
+
+
+
+This one gives the best results amongst the three as it fits the best for values before 0.2 and it is expected as we are using exponentially more parameters.
+
+
+## Calling all three together
+
+
+
+```{r}
+
+l=2
+pts_val_2 = piecewiseConstant(min_max_hp, city_mpg, l, FALSE, "blue") # Calling with False as we do not need multiple scatter plots
+
+l=3
+pts_val_3 = piecewiseConstant(min_max_hp, city_mpg, l, FALSE, "green") # Calling with False as we do not need multiple scatter plots
+
+l=4
+pts_val = piecewiseConstant(min_max_hp, city_mpg, l, TRUE, "red") # This will make one scatter plot
+
+lines(pts_val_2[1:8], pts_val_2[9:16], col="blue", lwd = 3)
+lines(pts_val_3[1:16], pts_val_3[17:32], col="green", lwd = 3)
+
+
+legend(x="topright", legend=c("L=2", "L=3","L=4"),col=c("blue", "green","red"), lty=1,lwd=3, cex=0.8)
+
+```
+
+
+# To demostrate the utility of the fourth parameter we will pass FALSE to the piecewise function.
+
+This time because we send the fourth parameter as FALSE, we will not get the fitted constants in the graph
+
+```{r}
+l=2
+pts_val = piecewiseConstant(min_max_hp, city_mpg, l, FALSE, "blue")
+
+print(pts_val)
+```
+
+## Contribution Statement
+Shashank: Wrote the code for Q1.
+Anirudh: Wrote the code for Q2.
+
+After having written our respective questions, we discussed and wrote the inferences we could make from the plots together.
